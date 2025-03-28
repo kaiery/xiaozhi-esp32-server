@@ -15,6 +15,13 @@ class WebSocketServer:
         self._vad, self._asr, self._llm, self._tts, self._memory, self.intent = self._create_processing_instances()
         self.active_connections = set()  # 添加全局连接记录
 
+        # 选择大语言模型的产商
+        self.select_llm_producers = self.config["selected_module"]["LLM"]
+        # 选择大语言模型的模型名称
+        self.select_llm_module_name = self.config["LLM"][self.config["selected_module"]["LLM"]]["model_name"]
+        # 选择大语言模型的类型
+        self.select_llm_type = self.config["LLM"][self.config["selected_module"]["LLM"]]["type"]
+
     def _create_processing_instances(self):
         memory_cls_name = self.config["selected_module"].get("Memory", "nomem") # 默认使用nomem
         has_memory_cfg = self.config.get("Memory") and memory_cls_name in self.config["Memory"]
@@ -63,6 +70,9 @@ class WebSocketServer:
         server_config = self.config["server"]
         host = server_config["ip"]
         port = server_config["port"]
+        selected_module = self.config.get("selected_module")
+        self.logger.bind(tag=TAG).info(f"selected_module values: {', '.join(selected_module.values())}")
+        self.logger.bind(tag=TAG).info(f"selected_module llm detail: {', '.join([self.select_llm_producers, self.select_llm_module_name, self.select_llm_type])}")
 
         self.logger.bind(tag=TAG).info("Server is running at ws://{}:{}", get_local_ip(), port)
         self.logger.bind(tag=TAG).info("=======上面的地址是websocket协议地址，请勿用浏览器访问=======")

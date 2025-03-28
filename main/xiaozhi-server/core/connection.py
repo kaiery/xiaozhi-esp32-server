@@ -9,6 +9,8 @@ import traceback
 import threading
 import websockets
 from typing import Dict, Any
+
+from core.kaiery.choose_utils import choose_system_prompt
 from plugins_func.loadplugins import auto_import_modules
 from config.logger import setup_logging
 from core.utils.dialogue import Message, Dialogue
@@ -101,8 +103,9 @@ class ConnectionHandler:
         self.use_function_call_mode = False
         if self.config["selected_module"]["Intent"] == 'function_call':
             self.use_function_call_mode = True
-        
+
         self.mcp_manager = MCPManager(self)
+        self.err_reason = None
 
     async def handle_connection(self, ws):
         try:
@@ -168,6 +171,7 @@ class ConnectionHandler:
 
         except AuthenticationError as e:
             self.logger.bind(tag=TAG).error(f"Authentication failed: {str(e)}")
+            self.err_reason = f'Authentication failed: {str(e)}'
             return
         except Exception as e:
             stack_trace = traceback.format_exc()
@@ -185,8 +189,9 @@ class ConnectionHandler:
             await handleAudioMessage(self, message)
 
     def _initialize_components(self):
-        """加载提示词"""
-        self.prompt = self.config["prompt"]
+        # 根据token，选择系统提示词
+        self.prompt = choose_system_prompt(self.config, self.headers)
+        # self.prompt = self.config["prompt"] # 原代码
         if self.private_config:
             self.prompt = self.private_config.private_config.get("prompt", self.prompt)
         self.dialogue.put(Message(role="system", content=self.prompt))
@@ -197,14 +202,14 @@ class ConnectionHandler:
         """加载记忆"""
         device_id = self.headers.get("device-id", None)
         self.memory.init_memory(device_id, self.llm)
-        
+
         """为意图识别设置LLM，优先使用专用LLM"""
         # 检查是否配置了专用的意图识别LLM
         intent_llm_name = self.config["Intent"]["intent_llm"]["llm"]
-        
+
         # 记录开始初始化意图识别LLM的时间
         intent_llm_init_start = time.time()
-        
+
         if not self.use_function_call_mode and intent_llm_name and intent_llm_name in self.config["LLM"]:
             # 如果配置了专用LLM，则创建独立的LLM实例
             from core.utils import llm as llm_utils
@@ -212,13 +217,13 @@ class ConnectionHandler:
             intent_llm_type = intent_llm_config.get("type", intent_llm_name)
             intent_llm = llm_utils.create_instance(intent_llm_type, intent_llm_config)
             self.logger.bind(tag=TAG).info(f"为意图识别创建了专用LLM: {intent_llm_name}, 类型: {intent_llm_type}")
-            
+
             self.intent.set_llm(intent_llm)
         else:
             # 否则使用主LLM
             self.intent.set_llm(self.llm)
             self.logger.bind(tag=TAG).info("意图识别使用主LLM")
-            
+
         # 记录意图识别LLM初始化耗时
         intent_llm_init_time = time.time() - intent_llm_init_start
         self.logger.bind(tag=TAG).info(f"意图识别LLM初始化完成，耗时: {intent_llm_init_time:.4f}秒")
@@ -508,7 +513,7 @@ class ConnectionHandler:
                 except json.JSONDecodeError:
                     self.logger.bind(tag=TAG).error(f"无法解析 function_arguments: {function_arguments}")
                     return ActionResponse(action=Action.REQLLM, result="参数解析失败", response="")
-                    
+
             tool_result = asyncio.run_coroutine_threadsafe(self.mcp_manager.execute_tool(
                 function_name,
                 args_dict
@@ -522,16 +527,16 @@ class ConnectionHandler:
                         content_text = content.text
                     elif content_type == "image":
                         pass
-            
+
             if len(content_text) > 0:
                 return ActionResponse(action=Action.REQLLM, result=content_text, response="")
-            
+
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"MCP工具调用错误: {e}")
             return ActionResponse(action=Action.REQLLM, result="工具调用出错", response="")
 
         return ActionResponse(action=Action.REQLLM, result="工具调用出错", response="")
-            
+
 
     def _handle_function_result(self, result, function_call_data, text_index):
         if result.action == Action.RESPONSE:  # 直接回复前端
@@ -662,17 +667,20 @@ class ConnectionHandler:
         # 触发停止事件并清理资源
         if self.stop_event:
             self.stop_event.set()
-        
+
         # 立即关闭线程池
         if self.executor:
             self.executor.shutdown(wait=False, cancel_futures=True)
             self.executor = None
-        
+
         # 清空任务队列
         self._clear_queues()
-        
+
         if ws:
-            await ws.close()
+            if self.err_reason:
+                await ws.close(code=1000, reason=self.err_reason)
+            else:
+                await ws.close()
         elif self.websocket:
             await self.websocket.close()
         self.logger.bind(tag=TAG).info("连接资源已释放")

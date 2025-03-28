@@ -67,8 +67,15 @@ def is_private_ip(ip_addr):
 
 def get_ip_info(ip_addr):
     try:
+        if is_private_ip(ip_addr):
+            return {
+                "city": "某地",
+                "region": "某省",
+                "country": "中国"
+            }
+
         base_url = "https://freeipapi.com/api/json"
-        url = base_url if is_private_ip(ip_addr) else f"{base_url}/{ip_addr}"
+        url = f"{base_url}/{ip_addr}"
 
         resp = requests.get(url).json()
 
@@ -78,7 +85,11 @@ def get_ip_info(ip_addr):
         return ip_info
     except Exception as e:
         logging.error(f"Error getting client ip info: {e}")
-        return {}
+        return {
+            "city": "某地",
+            "region": "某省",
+            "country": "中国"
+        }
 
 
 def read_config(config_path):

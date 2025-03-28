@@ -16,6 +16,7 @@ class LLMProvider(LLMProviderBase):
         else:
             self.base_url = config.get("url")
         self.max_tokens = config.get("max_tokens", 500)
+        self.temperature = config.get("temperature", 0.9)
 
         check_model_key("LLM", self.api_key)
         self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
@@ -27,6 +28,7 @@ class LLMProvider(LLMProviderBase):
                 messages=dialogue,
                 stream=True,
                 max_tokens=self.max_tokens,
+                temperature=self.temperature,
             )
 
             is_active = True
