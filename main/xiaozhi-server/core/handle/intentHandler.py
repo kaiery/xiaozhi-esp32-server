@@ -17,8 +17,11 @@ async def handle_user_intent(conn, text):
         return True
     # 检查是否是唤醒词
     if await checkWakeupWords(conn, text):
+        # print(f'是唤醒词')
         return True
-
+    if conn.config['selected_module']['Intent'] == 'nointent':
+        # print(f'意图类型：无意图')
+        return False
     if conn.use_function_call_mode:
         # 使用支持function calling的聊天方法,不再进行意图分析
         return False
