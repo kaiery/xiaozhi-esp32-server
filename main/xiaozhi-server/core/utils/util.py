@@ -24,6 +24,7 @@ def get_local_ip():
     except Exception as e:
         return "127.0.0.1"
 
+
 def is_private_ip(ip_addr):
     """
     Check if an IP address is a private IP address (compatible with IPv4 and IPv6).
@@ -48,7 +49,7 @@ def is_private_ip(ip_addr):
             elif ip_addr == '127.0.0.1':
                 return True  # Loopback address
             elif ip_parts[0] == 169 and ip_parts[1] == 254:
-                return True # Link-local address 169.254.0.0/16
+                return True  # Link-local address 169.254.0.0/16
             else:
                 return False  # Not a private IPv4 address
         else:  # IPv6 address
@@ -58,38 +59,34 @@ def is_private_ip(ip_addr):
             elif ip_addr == '::1':
                 return True  # Loopback address
             elif ip_addr.startswith('fe80:'):
-                return True # Link-local unicast addresses (FE80::/10)
+                return True  # Link-local unicast addresses (FE80::/10)
             else:
                 return False  # Not a private IPv6 address
 
     except (ValueError, IndexError):
         return False  # IP address format error or insufficient segments
 
+
 def get_ip_info(ip_addr):
+    same_city = 'I’m in the same city as you!'
     try:
         if is_private_ip(ip_addr):
-            return {
-                "city": "某地",
-                "region": "某省",
-                "country": "中国"
-            }
+            return same_city
 
-        base_url = "https://freeipapi.com/api/json"
-        url = f"{base_url}/{ip_addr}"
-
-        resp = requests.get(url).json()
-
-        ip_info = {
-            "city": resp.get("cityName")
-        }
+        response = requests.get(f'https://qifu-api.baidubce.com/ip/geo/v1/district?ip={ip_addr}')
+        resp = response.json()
+        # {'code': 'Success', 'data': {'continent': '亚洲', 'country': '中国', 'zipcode': '410013', 'owner': '中国电信', 'isp': '中国电信', 'adcode': '430104', 'prov': '湖南省', 'city': '长沙市', 'district': '岳麓区'}, 'ip': '113.246.61.239'}
+        # {'code': 'Success', 'data': {'continent': '北美洲', 'country': '美国', 'zipcode': '98104', 'owner': '亚马逊', 'isp': '亚马逊', 'adcode': '',          'prov': '华盛顿州', 'city': '西雅图', 'district': ''}, 'ip': '147.108.111.121'}
+        if resp['code'] == 'Success':
+            data = resp['data']
+            position = f'{data["district"]},{data["city"]},{data["prov"]},{data["country"]}'
+            ip_info = f'I’m currently in {position}'
+        else:
+            ip_info = same_city
         return ip_info
     except Exception as e:
         logging.error(f"Error getting client ip info: {e}")
-        return {
-            "city": "某地",
-            "region": "某省",
-            "country": "中国"
-        }
+        return same_city
 
 
 def read_config(config_path):
@@ -156,6 +153,7 @@ def remove_punctuation_and_length(text):
         return 0, ""
     return len(result), result
 
+
 def check_model_key(modelType, modelKey):
     if "你" in modelKey:
         logging.error("你还没配置" + modelType + "的密钥，请在配置文件中配置密钥，否则无法正常工作")
@@ -188,7 +186,8 @@ def check_ffmpeg_installed():
         error_msg += "1、按照项目的安装文档，正确进入conda环境\n"
         error_msg += "2、查阅安装文档，如何在conda环境中安装ffmpeg\n"
         raise ValueError(error_msg)
-    
+
+
 def extract_json_from_string(input_string):
     """提取字符串中的 JSON 部分"""
     pattern = r'(\{.*\})'

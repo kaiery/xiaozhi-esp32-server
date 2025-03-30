@@ -1,0 +1,30 @@
+[Unit] 
+Description=xiaozhi service
+After=network-online.target network.target syslog.target
+
+[Service]
+User=devUser
+Group=devUser
+WorkingDirectory=/home/devUser/project/xiaozhi-server/
+
+# 确保日志目录存在
+ExecStartPre=/bin/mkdir -p /home/devUser/project/xiaozhi-server/logs
+
+Environment="PATH=/home/devUser/anaconda3/envs/xiaozhi-esp32-server/bin"
+Environment="LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib"
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=/home/devUser/anaconda3/envs/xiaozhi-esp32-server/bin/python /home/devUser/project/xiaozhi-server/app.py
+StandardOutput=file:/home/devUser/project/xiaozhi-server/logs/xiaozhi.log
+StandardError=file:/home/devUser/project/xiaozhi-server/logs/xiaozhi-error.log
+
+# 权限处理
+PermissionsStartOnly=true
+
+Restart=always
+RestartSec=5s
+
+[Install] 
+WantedBy=multi-user.target
+
+
