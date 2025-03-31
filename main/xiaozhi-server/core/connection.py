@@ -11,6 +11,7 @@ import websockets
 from typing import Dict, Any
 
 from core.kaiery.choose_utils import choose_system_prompt
+from core.kaiery.user_profile import get_user_info
 from plugins_func.loadplugins import auto_import_modules
 from config.logger import setup_logging
 from core.utils.dialogue import Message, Dialogue
@@ -105,7 +106,8 @@ class ConnectionHandler:
             self.use_function_call_mode = True
 
         self.mcp_manager = MCPManager(self)
-        self.err_reason = None
+        self.err_reason = None  # fanz
+        self.user_info_prompt = None  # fanz
 
     async def handle_connection(self, ws):
         try:
@@ -230,9 +232,15 @@ class ConnectionHandler:
 
         """加载位置信息"""
         self.client_ip_info = get_ip_info(self.client_ip)
-        if self.client_ip_info is not None and "city" in self.client_ip_info:
+        if self.client_ip_info is not None:
             self.logger.bind(tag=TAG).info(f"客户端位置: {self.client_ip_info}, {self.client_ip}")
             self.prompt = self.prompt + f"\n{self.client_ip_info}"
+            self.dialogue.update_system_message(self.prompt)
+        """加载用户信息"""
+        self.user_info_prompt = get_user_info(self.headers)
+        if self.user_info_prompt is not None:
+            self.logger.bind(tag=TAG).info(f"用户信息: {self.user_info_prompt}")
+            self.prompt = self.prompt + f"\n{self.user_info_prompt}"
             self.dialogue.update_system_message(self.prompt)
 
         """加载MCP工具"""
