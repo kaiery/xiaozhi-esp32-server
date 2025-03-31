@@ -153,7 +153,6 @@ def remove_punctuation_and_length(text):
         return 0, ""
     return len(result), result
 
-
 def check_model_key(modelType, modelKey):
     if "你" in modelKey:
         logging.error("你还没配置" + modelType + "的密钥，请在配置文件中配置密钥，否则无法正常工作")
@@ -186,8 +185,7 @@ def check_ffmpeg_installed():
         error_msg += "1、按照项目的安装文档，正确进入conda环境\n"
         error_msg += "2、查阅安装文档，如何在conda环境中安装ffmpeg\n"
         raise ValueError(error_msg)
-
-
+    
 def extract_json_from_string(input_string):
     """提取字符串中的 JSON 部分"""
     pattern = r'(\{.*\})'
