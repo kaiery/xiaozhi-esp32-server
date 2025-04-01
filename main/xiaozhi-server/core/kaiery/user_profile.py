@@ -46,7 +46,10 @@ def get_user_info(headers):
     if user_id and not (user_name or user_age or user_gender or user_from):
         parts.append(f"My ID is {user_id}")
 
-    # Combine all parts into a sentence
-    introduction = " ".join(parts) + "."
+    if not (user_id or user_name or user_age or user_gender or user_from):
+        introduction = None
+    else:
+        # Combine all parts into a sentence
+        introduction = " ".join(parts) + "."
 
     return introduction
