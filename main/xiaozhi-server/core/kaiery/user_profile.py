@@ -1,3 +1,5 @@
+import urllib.parse
+
 from config.logger import setup_logging
 
 TAG = __name__
@@ -7,11 +9,18 @@ logger = setup_logging()
 def get_user_info(headers):
     """获取用户信息并以自然语言组合"""
     # 从headers中提取用户信息，如果不存在则为空字符串
+    user_id = headers.get("user_id", "")
     user_name = headers.get("user_name", "")
     user_age = headers.get("user_age", "")
     user_gender = headers.get("user_gender", "").lower()
     user_from = headers.get("user_from", "")
-    user_id = headers.get("user_id", "")
+
+    user_id = urllib.parse.unquote(user_id, encoding='utf-8')
+    user_name = urllib.parse.unquote(user_name, encoding='utf-8')
+    user_age = urllib.parse.unquote(user_age, encoding='utf-8')
+    user_gender = urllib.parse.unquote(user_gender, encoding='utf-8')
+    user_from = urllib.parse.unquote(user_from, encoding='utf-8')
+
     # Build introduction parts
     parts = []
 

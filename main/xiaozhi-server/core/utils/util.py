@@ -73,13 +73,17 @@ def get_ip_info(ip_addr):
         if is_private_ip(ip_addr):
             return same_city
 
-        response = requests.get(f'https://qifu-api.baidubce.com/ip/geo/v1/district?ip={ip_addr}')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',  # 声明接受JSON格式响应
+            'Connection': 'keep-alive',  # 保持连接
+        }
+        url = f'http://ip-api.com/json/{ip_addr}'
+        response = requests.get(url=url, headers=headers)
         resp = response.json()
-        # {'code': 'Success', 'data': {'continent': '亚洲', 'country': '中国', 'zipcode': '410013', 'owner': '中国电信', 'isp': '中国电信', 'adcode': '430104', 'prov': '湖南省', 'city': '长沙市', 'district': '岳麓区'}, 'ip': '113.246.61.239'}
-        # {'code': 'Success', 'data': {'continent': '北美洲', 'country': '美国', 'zipcode': '98104', 'owner': '亚马逊', 'isp': '亚马逊', 'adcode': '',          'prov': '华盛顿州', 'city': '西雅图', 'district': ''}, 'ip': '147.108.111.121'}
-        if resp['code'] == 'Success':
-            data = resp['data']
-            position = f'{data["district"]},{data["city"]},{data["prov"]},{data["country"]}'
+        # {"status":"success","country":"China","countryCode":"CN","region":"HN","regionName":"Hunan","city":"Changsha","zip":"","lat":28.2014,"lon":112.9611,"timezone":"Asia/Shanghai","isp":"Chinanet","org":"","as":"AS4134 CHINANET-BACKBONE","query":"222.240.13.107"}
+        if resp['status'] == 'success':
+            position = f'{resp["city"]},{resp["regionName"]},{resp["country"]}'
             ip_info = f'I’m currently in {position}'
         else:
             ip_info = same_city
