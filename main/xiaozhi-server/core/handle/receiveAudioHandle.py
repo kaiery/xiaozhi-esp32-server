@@ -17,35 +17,83 @@ async def handleAudioMessage(conn, audio):
     else:
         have_voice = conn.client_have_voice
 
-    # 如果本次没有声音，本段也没声音，就把声音丢弃了
-    if have_voice == False and conn.client_have_voice == False:
-        await no_voice_close_connect(conn)
-        conn.asr_audio.append(audio)
-        conn.asr_audio = conn.asr_audio[
-            -10:
-        ]  # 保留最新的10帧音频内容，解决ASR句首丢字问题
-        return
-    conn.client_no_voice_last_time = 0.0
-    conn.asr_audio.append(audio)
-    # 如果本段有声音，且已经停止了
-    if conn.client_voice_stop:
-        conn.client_abort = False
-        conn.asr_server_receive = False
-        # 音频太短了，无法识别
-        if len(conn.asr_audio) < 15:
-            conn.asr_server_receive = True
-        else:
-            text, file_path = await conn.asr.speech_to_text(
-                conn.asr_audio, conn.session_id
-            )
-            logger.bind(tag=TAG).info(f"识别文本: {text}")
-            text_len, _ = remove_punctuation_and_length(text)
+    # 检查是否启用了实时ASR
+    is_realtime_asr = conn.asr.use_realtime_asr
+    # --- 实时ASR处理逻辑 ---
+    if is_realtime_asr:
+        # 只要有声音就持续处理音频块
+        if have_voice or len(conn.asr_audio) > 0:  # 如果VAD刚检测到无声音，但缓冲区还有数据，也需要处理
+            conn.client_no_voice_last_time = 0.0  # 重置静默计时器
+            conn.asr_audio.append(audio)  # 仍然暂存原始opus包，可能用于调试或特殊情况
+            try:
+                # 将音频块传递给ASR进行实时处理
+                await conn.asr.process_audio_chunk(audio)
+            except Exception as e:
+                logger.bind(tag=TAG).error(f"实时处理音频块失败: {e}", exc_info=True)
+
+        # 当检测到语音停止时，触发最终识别
+        if conn.client_voice_stop:
+            conn.client_abort = False  # 重置打断标记
+            conn.asr_server_receive = False  # 暂停接收新音频，直到LLM响应回来
+            # logger.bind(tag=TAG).info("检测到语音停止，开始获取最终识别结果...")
+            try:
+                # 调用 finalize 获取最终文本
+                final_text = await conn.asr.finalize_recognition()
+                logger.bind(tag=TAG).info(f"最终识别文本: {final_text}")
+            except Exception as e:
+                logger.bind(tag=TAG).error(f"获取最终识别结果失败: {e}", exc_info=True)
+                final_text = ""  # 出错则为空
+
+            # 清理本次对话的原始opus包缓存
+            conn.asr_audio.clear()
+            conn.reset_vad_states()  # 重置VAD状态
+
+            # 检查识别结果是否有效
+            text_len, _ = remove_punctuation_and_length(final_text)
             if text_len > 0:
-                await startToChat(conn, text)
+                await startToChat(conn, final_text)  # 发起聊天
             else:
+                # logger.bind(tag=TAG).info("最终识别结果为空或无效，不触发聊天。")
+                conn.asr_server_receive = True  # 没有有效文本，重新允许接收音频
+        # 如果没有声音，并且没有积攒的音频需要处理（asr_audio为空），并且不是刚停止说话，则检查超时
+        elif not have_voice and len(conn.asr_audio) == 0:
+            await no_voice_close_connect(conn)
+
+    else:
+        # 如果本次没有声音，本段也没声音，就把声音丢弃了
+        if have_voice == False and conn.client_have_voice == False:
+            await no_voice_close_connect(conn)
+            conn.asr_audio.append(audio)
+            conn.asr_audio = conn.asr_audio[
+                -10:
+            ]  # 保留最新的10帧音频内容，解决ASR句首丢字问题
+            return
+        conn.client_no_voice_last_time = 0.0
+        conn.asr_audio.append(audio)
+        # 如果本段有声音，且已经停止了
+        if conn.client_voice_stop:
+            conn.client_abort = False
+            conn.asr_server_receive = False
+            # 音频太短了，无法识别
+            if len(conn.asr_audio) < 15:
+                logger.bind(tag=TAG).info(f"非实时模式：音频长度过短 ({len(conn.asr_audio)} frames)，忽略。")
                 conn.asr_server_receive = True
-        conn.asr_audio.clear()
-        conn.reset_vad_states()
+            else:
+                logger.bind(tag=TAG).info(f"非实时模式：检测到语音停止，处理累积的 {len(conn.asr_audio)} 个音频包...")
+                # 调用原来的 speech_to_text 处理整个列表
+                text, file_path = await conn.asr.speech_to_text(
+                    conn.asr_audio, conn.session_id
+                )
+                logger.bind(tag=TAG).info(f"识别文本: {text}")
+                text_len, _ = remove_punctuation_and_length(text)
+                if text_len > 0:
+                    await startToChat(conn, text)
+                else:
+                    logger.bind(tag=TAG).info("非实时识别结果为空或无效，不触发聊天。")
+                    conn.asr_server_receive = True  # 没有有效文本，重新允许接收音频
+            # 清理累积的音频和VAD状态
+            conn.asr_audio.clear()
+            conn.reset_vad_states()
 
 
 async def startToChat(conn, text):

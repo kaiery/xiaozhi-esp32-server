@@ -38,6 +38,8 @@ class ASRProvider(ASRProviderBase):
         self.model_dir = config.get("model_dir")
         self.output_dir = config.get("output_dir")  # 修正配置键名
         self.delete_audio_file = delete_audio_file
+        # fun_local 不支持实时，强制为 False
+        self._use_realtime_asr = False  # 使用下划线表示内部状态
 
         # 确保输出目录存在
         os.makedirs(self.output_dir, exist_ok=True)
@@ -49,6 +51,11 @@ class ASRProvider(ASRProviderBase):
                 hub="hf"
                 # device="cuda:0",  # 启用GPU加速
             )
+
+    # --- 实现基类新增的属性 ---
+    @property
+    def use_realtime_asr(self) -> bool:
+        return self._use_realtime_asr  # 返回内部状态
 
     def save_audio_to_file(self, opus_data: List[bytes], session_id: str) -> str:
         """将Opus音频数据解码并保存为WAV文件"""
@@ -75,6 +82,11 @@ class ASRProvider(ASRProviderBase):
 
     async def speech_to_text(self, opus_data: List[bytes], session_id: str) -> Tuple[Optional[str], Optional[str]]:
         """语音转文本主处理逻辑"""
+        if self._use_realtime_asr:
+            logger.bind(tag=TAG).warning("fun_local ASR Provider 不支持实时模式，将回退到非实时处理。")
+            # 或者可以直接返回错误
+            # return "错误：当前配置不支持实时识别", None
+
         file_path = None
         try:
             # 保存音频文件
@@ -108,3 +120,16 @@ class ASRProvider(ASRProviderBase):
                     logger.bind(tag=TAG).debug(f"已删除临时音频文件: {file_path}")
                 except Exception as e:
                     logger.bind(tag=TAG).error(f"文件删除失败: {file_path} | 错误: {e}")
+
+    # --- 实现基类新增的实时方法 (空实现或抛异常) ---
+    async def process_audio_chunk(self, opus_packet: bytes):
+        """fun_local 不支持处理单个实时音频块"""
+        # logger.bind(tag=TAG).warning("process_audio_chunk called on fun_local, which is not supported.")
+        pass  # 静默处理或记录警告
+
+    async def finalize_recognition(self) -> Optional[str]:
+        """fun_local 不支持结束实时识别流程"""
+        # logger.bind(tag=TAG).warning("finalize_recognition called on fun_local, which is not supported.")
+        return None  # 或者可以返回一个空字符串 ""
+
+# --- END OF FILE core/providers/asr/fun_local.py ---
