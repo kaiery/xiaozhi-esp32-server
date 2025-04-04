@@ -152,6 +152,7 @@ main/manager-web/node_modules
 
 # model files
 main/xiaozhi-server/models/SenseVoiceSmall/model.pt
+main/xiaozhi-server/models/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online/model.pt
 main/xiaozhi-server/models/sherpa-onnx*
 my_wakeup_words.mp3
 main/manager-api/.vscode
